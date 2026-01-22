@@ -1,0 +1,109 @@
+import os
+import cv2
+import numpy as np
+from PIL import Image
+import pytesseract
+import tesserocr
+from tensorflow.keras.models import load_model
+
+# Mapping font names to indices
+indicies={'ACaslonPro-Bold': 0, 'ACaslonPro-BoldItalic': 1, 'ACaslonPro-Italic': 2, 'ACaslonPro-Regular': 3, 'ACaslonPro-Semibold': 4, 'ACaslonPro-SemiboldItalic': 5, 'AJensonPro-Bold': 6, 'AJensonPro-BoldCapt': 7, 'AJensonPro-Semibold': 8, 'Agency': 9, 'Akzidenz Grotesk': 10, 'AldusLTStd-Roman': 11, 'Algerian': 12, 'AmigoStd': 13, 'AnnaStd': 14, 'AntiqueOliveStd-Compact': 15, 'AntiqueOliveStd-Nord': 16, 'AntiqueOliveStd-NordItalic': 17, 'ApolloMTStd': 18, 'ArcanaGMMStd-Manuscript': 19, 'Arial': 20, 'ArnoPro-Bold': 21, 'ArnoPro-BoldItalic': 22, 'ArnoPro-BoldItalicDisplay': 23, 'ArnoPro-Caption': 24, 'ArnoPro-Display': 25, 'ArnoPro-LightDisplay': 26, 'ArnoPro-Regular': 27, 'ArnoPro-Smbd': 28, 'ArnoPro-SmbdDisplay': 29, 'AshleyScriptMTStd': 30, 'AuriolLTStd-Black': 31, 'AuriolLTStd-BlackItalic': 32, 'AuriolLTStd-Bold': 33, 'AuriolLTStd-BoldItalic': 34, 'BakerSignetStd': 35, 'BalzanoStd': 36, 'BancoStd': 37, 'BansheeStd': 38, 'Baskerville': 39, 'BaskervilleCyrLTStd-Incline': 40, 'BeeskneesStd': 41, 'Bell MT': 42, 'BellCentennialStd-Address': 43, 'BellCentennialStd-NameNum': 44, 'BellGothicStd-Black': 45, 'BellGothicStd-Bold': 46, 'BellGothicStd-Light': 47, 'BellMTStd-Bold': 48, 'BellMTStd-Regular': 49, 'BellMTStd-SemiBold': 50, 'Bembo': 51, 'BemboStd': 52, 'BemboStd-Bold': 53, 'BemboStd-ExtraBold': 54, 'BemboStd-Semibold': 55, 'BenguiatGothicStd-Bold': 56, 'BenguiatGothicStd-BoldObl': 57, 'BenguiatGothicStd-Book': 58, 'BenguiatGothicStd-Heavy': 59, 'BenguiatGothicStd-HeavyObl': 60, 'BenguiatGothicStd-Medium': 61, 'BerkeleyStd-Black': 62, 'BerkeleyStd-BlackItalic': 63, 'BerkeleyStd-Bold': 64, 'BerkeleyStd-Book': 65, 'BerkeleyStd-Italic': 66, 'BerkeleyStd-Medium': 67, 'BerlingLTStd-Bold': 68, 'BerlingLTStd-Italic': 69, 'BerlingLTStd-Roman': 70, 'BermudaLPStd-Solid': 71, 'BermudaLPStd-Squiggle': 72, 'BernhardModernStd-Bold': 73, 'BernhardModernStd-BoldIt': 74, 'BernhardModernStd-Roman': 75, 'BernhardStd-BoldCondensed': 76, 'BiffoMTStd': 77, 'Bodoni': 78, 'BodoniStd': 79, 'BodoniStd-Bold': 80, 'BodoniStd-Book': 81, 'BodoniStd-BookItalic': 82, 'BodoniStd-Poster': 83, 'BodoniStd-PosterCompressed': 84, 'BodoniStd-PosterItalic': 85, 'Book Antiqua': 86, 'BossaNovaMVBStd': 87, 'Brandish': 88, 'BriemScriptStd-Black': 89, 'BriemScriptStd-Light': 90, 'BriemScriptStd-Medium': 91, 'BrunoJBStd': 92, 'BrunoJBStd-Bold': 93, 'BrushScriptStd': 94, 'BulmerMTStd-Display': 95, 'BulmerMTStd-SemiBoldItalic': 96, 'CaeciliaLTStd-Bold': 97, 'CaeciliaLTStd-Heavy': 98, 'CaeciliaLTStd-HeavyItalic': 99, 'CaeciliaLTStd-Italic': 100, 'CaeciliaLTStd-Light': 101, 'CaeciliaLTStd-Roman': 102, 'CaflischScriptPro-Bold': 103, 'CaflischScriptPro-Light': 104, 'CaflischScriptPro-Regular': 105, 'CaflischScriptPro-Semibold': 106, 'CalcitePro-Bold': 107, 'CalcitePro-Regular': 108, 'CalibanStd': 109, 'Calibry': 110, 'Californian FB': 111, 'Calligraphy': 112, 'CalvertMTStd-Bold': 113, 'Calvin': 114, 'Cambria': 115, 'Candara': 116, 'CantoriaMTStd': 117, 'CantoriaMTStd-Bold': 118, 'CantoriaMTStd-ExtraBold': 119, 'CantoriaMTStd-SemiBold': 120, 'CantoriaMTStd-SemiBoldIt': 121, 'CarolinaLTStd': 122, 'CascadeScriptLTStd': 123, 'Caslon224Std-Black': 124, 'Caslon224Std-BlackItalic': 125, 'Caslon224Std-Bold': 126, 'Caslon224Std-BoldItalic': 127, 'Caslon224Std-Book': 128, 'Caslon224Std-BookItalic': 129, 'Caslon224Std-Medium': 130, 'CastellarMTStd': 131, 'CaxtonStd-Bold': 132, 'CaxtonStd-BoldItalic': 133, 'CaxtonStd-Book': 134, 'CaxtonStd-Light': 135, 'CelestiaAntiquaStd': 136, 'CentaurMTStd': 137, 'CentaurMTStd-Bold': 138, 'CentaurMTStd-Italic': 139, 'Century': 140, 'CenturyStd-Bold': 141, 'CenturyStd-Book': 142, 'CenturyStd-BookItalic': 143, 'CenturyStd-HandtooledBold': 144, 'CenturyStd-Light': 145, 'CenturyStd-LightCondensedIt': 146, 'CenturyStd-Ultra': 147, 'CerigoStd-Medium': 148, 'CerigoStd-MediumItalic': 149, 'ChaparralPro-Bold': 150, 'ChaparralPro-BoldCapt': 151, 'ChaparralPro-Regular': 152, 'ChaparralPro-Semibold': 153, 'CharlemagneStd-Bold': 154, 'CharlemagneStd-Regular': 155, 'CharmeStd': 156, 'CheltenhamStd-HdtooledBold': 157, 'ClairvauxLTStd': 158, 'ClearfaceGothicLTStd-Black': 159, 'ClearfaceGothicLTStd-Bold': 160, 'ClearfaceGothicLTStd-Light': 161, 'ClearfaceGothicLTStd-Medium': 162, 'ClearfaceGothicLTStd-Roman': 163, 'CloisterStd-OpenFace': 164, 'Comic Sans MS': 165, 'CongaBravaStd-Black': 166, 'CongaBravaStencilStd-Black': 167, 'Consolas': 168, 'CopperplateGothicStd-29AB': 169, 'CopperplateGothicStd-30AB': 170, 'CopperplateGothicStd-30BC': 171, 'CopperplateGothicStd-31AB': 172, 'CopperplateGothicStd-31BC': 173, 'CopperplateGothicStd-32AB': 174, 'CopperplateGothicStd-32BC': 175, 'CopperplateGothicStd-33BC': 176, 'Corbel': 177, 'CoronetLTStd-Bold': 178, 'CoronetLTStd-Regular': 179, 'Courier': 180, 'CourierStd': 181, 'CourierStd-Bold': 182, 'CritterStd': 183, 'CronosPro-Bold': 184, 'CronosPro-BoldDispIt': 185, 'CronosPro-BoldIt': 186, 'CronosPro-Disp': 187, 'CronosPro-Lt': 188, 'CronosPro-Regular': 189, 'CronosPro-Semibold': 190, 'CronosPro-SemiboldIt': 191, 'CushingStd-Book': 192, 'CushingStd-HeavyItalic': 193, 'CushingStd-Medium': 194, 'CutoutStd': 195, 'DINEngschriftStd': 196, 'DINMittelschriftStd': 197, 'DINNeuzeitGroteskStd-BdCond': 198, 'DINNeuzeitGroteskStd-Light': 199, 'DelphinLTStd-1': 200, 'DelphinLTStd-2': 201, 'Didot': 202, 'DidotLTStd-Bold': 203, 'DidotLTStd-Headline': 204, 'DidotLTStd-Italic': 205, 'DidotLTStd-Roman': 206, 'DiotimaLTStd-Italic': 207, 'DiotimaLTStd-Roman': 208, 'DiskusLTStd': 209, 'DiskusLTStd-Bold': 210, 'DorchesterScriptMTStd': 211, 'DoricLTStd-Bold': 212, 'EccentricStd': 213, 'EgyptienneFLTStd-Roman': 214, 'EhrhardtMTStd-Italic': 215, 'ElectraLTStd-Bold': 216, 'Elephant': 217, 'EllingtonMTStd': 218, 'EspritStd-Black': 219, 'EspritStd-BlackItalic': 220, 'EspritStd-Bold': 221, 'EspritStd-BoldItalic': 222, 'EspritStd-Book': 223, 'EspritStd-BookItalic': 224, 'ExPontoPro-Bold': 225, 'ExPontoPro-Regular': 226, 'FairfieldLTStd-Bold': 227, 'FairfieldLTStd-Heavy': 228, 'FairfieldLTStd-HeavyItalic': 229, 'FairfieldLTStd-LightItalic': 230, 'FalstaffMTStd': 231, 'Fascinate': 232, 'FeniceStd-Bold': 233, 'FeniceStd-BoldOblique': 234, 'FeniceStd-Light': 235, 'FeniceStd-LightOblique': 236, 'FeniceStd-Regular': 237, 'FeniceStd-Ultra': 238, 'FloodStd': 239, 'FloraStd-Bold': 240, 'FloraStd-Medium': 241, 'FlorensLPStd': 242, 'FlyerLTStd-BlackCondensed': 243, 'FlyerLTStd-ExtraBlackCond': 244, 'ForteMTStd': 245, 'FournierMTStd-Regular': 246, 'Franklin Gothic': 247, 'Frutiger': 248, 'Futura': 249, 'GalahadStd-Regular': 250, 'Garamond': 251, 'GaramondPremrPro': 252, 'GaramondPremrPro-BdIt': 253, 'GaramondPremrPro-LtDisp': 254, 'GaramondPremrPro-MedCapt': 255, 'GaramondPremrPro-SmbdDisp': 256, 'GaramondStd-HandtooledBold': 257, 'GarthGraphicStd': 258, 'GarthGraphicStd-Black': 259, 'GarthGraphicStd-ExtraBold': 260, 'Georgia': 261, 'GiddyupStd': 262, 'Gill sans': 263, 'GillSansStd': 264, 'GillSansStd-Bold': 265, 'GillSansStd-BoldCondensed': 266, 'GillSansStd-BoldExtraCond': 267, 'GillSansStd-BoldItalic': 268, 'GillSansStd-Condensed': 269, 'GillSansStd-ExtraBold': 270, 'GillSansStd-ExtraBoldDisp': 271, 'GillSansStd-Italic': 272, 'GillSansStd-Light': 273, 'GillSansStd-LightItalic': 274, 'GillSansStd-LightShadowed': 275, 'GillSansStd-UltraBold': 276, 'GillSansStd-UltraBoldCond': 277, 'GiovanniStd-Black': 278, 'GiovanniStd-BlackItalic': 279, 'GiovanniStd-Bold': 280, 'GiovanniStd-Book': 281, 'GoudyModernMTStd': 282, 'GoudySansStd-Black': 283, 'GoudySansStd-BlackItalic': 284, 'GoudySansStd-Bold': 285, 'GoudySansStd-BoldItalic': 286, 'GoudySansStd-Book': 287, 'GoudySansStd-Medium': 288, 'GoudySansStd-MediumItalic': 289, 'GoudyTextMTStd': 290, 'GranjonLTStd': 291, 'GranjonLTStd-Bold': 292, 'GraphiteStd-Narrow': 293, 'GreymantleMVBStd': 294, 'GrotesqueMTStd-Bold': 295, 'GrotesqueMTStd-BoldExtended': 296, 'GrotesqueMTStd-Condensed': 297, 'GrotesqueMTStd-Light': 298, 'HadrianoStd-ExtraBoldCond': 299, 'HardwoodLPStd': 300, 'Helvetica': 301, 'HighlanderStd-Bold': 302, 'HighlanderStd-Book': 303, 'HighlanderStd-Medium': 304, 'HiroshigeStd-Black': 305, 'Hombre': 306, 'ITCAvantGardeStd-Bold': 307, 'ITCAvantGardeStd-BoldCn': 308, 'ITCAvantGardeStd-BoldObl': 309, 'ITCAvantGardeStd-DemiCn': 310, 'ITCAvantGardeStd-Md': 311, 'ITCAvantGardeStd-MdCn': 312, 'ITCAvantGardeStd-XLt': 313, 'ITCAvantGardeStd-XLtCn': 314, 'ITCAvantGardeStd-XLtCnObl': 315, 'ITCFranklinGothicStd-BkCd': 316, 'ITCFranklinGothicStd-BkXCp': 317, 'ITCFranklinGothicStd-DmCp': 318, 'ITCFranklinGothicStd-MdCd': 319, 'ITCFranklinGothicStd-Med': 320, 'ITCFranklinGothicStd-MedIt': 321, 'ITCSymbolStd-BlackItalic': 322, 'ITCSymbolStd-Bold': 323, 'ITCSymbolStd-BoldItalic': 324, 'ITCSymbolStd-Book': 325, 'ITCSymbolStd-Medium': 326, 'ImpactLTStd': 327, 'IronwoodStd': 328, 'IsabellaStd': 329, 'IsadoraStd-Bold': 330, 'IsadoraStd-Regular': 331, 'JoannaMTStd': 332, 'JoannaMTStd-Bold': 333, 'JoannaMTStd-ExtraBold': 334, 'JoannaMTStd-Italic': 335, 'JuniperStd': 336, 'KabelLTStd-Black': 337, 'KabelLTStd-Book': 338, 'KabelLTStd-Heavy': 339, 'KabelLTStd-Light': 340, 'KeplerStd-LightSubh': 341, 'KeplerStd-SemiboldSubh': 342, 'KhakiStd-1': 343, 'KinoMTStd': 344, 'KlangMTStd': 345, 'KochAntiquaLTStd': 346, 'KoloLPStd-Regular': 347, 'KompaktLTStd': 348, 'KuenstlerScriptLTStd-2Bold': 349, 'KuenstlerScriptLTStd-Black': 350, 'KuenstlerScriptLTStd-Medium': 351, 'LCD Mono': 352, 'LatinMTStd-Condensed': 353, 'Lato': 354, 'LeawoodStd-Black': 355, 'LeawoodStd-Bold': 356, 'LeawoodStd-BoldItalic': 357, 'LeawoodStd-Book': 358, 'LegacySansStd-Bold': 359, 'LegacySansStd-BoldItalic': 360, 'LegacySansStd-Book': 361, 'LegacySansStd-Medium': 362, 'LegacySansStd-Ultra': 363, 'LegacySerifStd-Bold': 364, 'LegacySerifStd-Medium': 365, 'LegacySerifStd-MediumItalic': 366, 'LegaultStd': 367, 'LegaultStd-Bold': 368, 'LinoLetterStd-Black': 369, 'LinoLetterStd-Medium': 370, 'LithosPro-Black': 371, 'LithosPro-Bold': 372, 'LithosPro-ExtraLight': 373, 'LithosPro-Light': 374, 'LithosPro-Regular': 375, 'Lucida Bright': 376, 'MagnesiumMVBStd': 377, 'ManitoLPStd': 378, 'MarigoldStd': 379, 'MaturaMTStd': 380, 'MediciScriptLTStd': 381, 'MendozaRomanStd-Book': 382, 'MercuriusMTStd-BoldScript': 383, 'MeridienLTStd-Bold': 384, 'MeridienLTStd-Medium': 385, 'MeridienLTStd-MediumItalic': 386, 'MeridienLTStd-Roman': 387, 'MesquiteStd': 388, 'Minion': 389, 'MinisterStd-BoldItalic': 390, 'MistralStd': 391, 'ModernMTStd-CondensedItalic': 392, 'ModernMTStd-Wide': 393, 'MojoStd': 394, 'MonaLisaStd-Recut': 395, 'MonaLisaStd-Solid': 396, 'MonolineScriptMTStd': 397, 'Monotype Corsiva': 398, 'MotterCorpusStd-Regular': 399, 'Mrs Eaves': 400, 'Myriad': 401, 'MyriadPro-Black': 402, 'MyriadPro-BlackCond': 403, 'MyriadPro-BlackCondIt': 404, 'MyriadPro-BlackIt': 405, 'MyriadPro-BlackSemiCn': 406, 'MyriadPro-BlackSemiExt': 407, 'MyriadPro-BlackSemiExtIt': 408, 'MyriadPro-Bold': 409, 'MyriadPro-BoldCond': 410, 'MyriadPro-BoldCondIt': 411, 'MyriadPro-BoldIt': 412, 'MyriadPro-BoldSemiCn': 413, 'MyriadPro-BoldSemiExt': 414, 'MyriadPro-BoldSemiExtIt': 415, 'MyriadPro-Cond': 416, 'MyriadPro-It': 417, 'MyriadPro-Light': 418, 'MyriadPro-LightCond': 419, 'MyriadPro-LightIt': 420, 'MyriadPro-LightSemiCn': 421, 'MyriadPro-LightSemiExt': 422, 'MyriadPro-Regular': 423, 'MyriadPro-SemiCn': 424, 'MyriadPro-SemiCnIt': 425, 'MyriadPro-SemiExt': 426, 'MyriadPro-SemiExtIt': 427, 'MyriadPro-Semibold': 428, 'MyriadPro-SemiboldCond': 429, 'MyriadPro-SemiboldCondIt': 430, 'MyriadPro-SemiboldIt': 431, 'MyriadPro-SemiboldSemiCn': 432, 'MyriadPro-SemiboldSemiExt': 433, 'MyriadStd-Tilt': 434, 'Nasalization': 435, 'NeueHammerUnzialeLTStd': 436, 'NeulandLTStd': 437, 'NeuzeitSLTStd-BookHeavy': 438, 'NewBerolinaMTStd': 439, 'News Gothic': 440, 'NotreDameLTStd-Roman': 441, 'NovareseStd-Bold': 442, 'NovareseStd-BoldItalic': 443, 'NovareseStd-Book': 444, 'NovareseStd-BookItalic': 445, 'NovareseStd-Medium': 446, 'NovareseStd-MediumItalic': 447, 'NovareseStd-Ultra': 448, 'NuevaStd-Bold': 449, 'NuevaStd-BoldCond': 450, 'NuevaStd-BoldCondItalic': 451, 'NuevaStd-BoldExtended': 452, 'NuevaStd-BoldExtendedItalic': 453, 'NuevaStd-BoldItalic': 454, 'NuevaStd-Cond': 455, 'NuevaStd-Italic': 456, 'NuevaStd-Regular': 457, 'NuptialScriptLTStd': 458, 'NyxStd': 459, 'OceanSansStd-BoldIta': 460, 'OceanSansStd-BoldSemiExt': 461, 'OceanSansStd-Semibold': 462, 'OceanSansStd-SemiboldExt': 463, 'OceanSansStd-SemiboldIta': 464, 'OceanSansStd-XBoldExtIta': 465, 'OceanSansStd-XBoldIta': 466, 'OfficinaSansStd-Bold': 467, 'OfficinaSansStd-BoldItalic': 468, 'OfficinaSansStd-Book': 469, 'OfficinaSerifStd-Bold': 470, 'OfficinaSerifStd-BoldItalic': 471, 'OfficinaSerifStd-Book': 472, 'OldStyle7Std': 473, 'OlympianLTStd-Bold': 474, 'OndineLTStd': 475, 'OnyxMTStd': 476, 'OratorStd': 477, 'OxfordStd': 478, 'PalaceScriptMTStd': 479, 'PalaceScriptMTStd-SemiBold': 480, 'Palatino linotype': 481, 'ParisianStd': 482, 'PenumbraFlareStd-Bold': 483, 'PenumbraFlareStd-Light': 484, 'PenumbraFlareStd-Semibold': 485, 'PenumbraHalfSerifStd-Reg': 486, 'PenumbraSansStd-Bold': 487, 'PenumbraSansStd-Regular': 488, 'PenumbraSansStd-Semibold': 489, 'PenumbraSerifStd-Regular': 490, 'PenumbraSerifStd-Semibold': 491, 'PepitaMTStd': 492, 'PepperwoodStd-Fill': 493, 'Perpetua': 494, 'PerpetuaStd': 495, 'PerpetuaStd-Bold': 496, 'PerpetuaStd-BoldItalic': 497, 'PerpetuaStd-Italic': 498, 'PhotinaMTStd-Bold': 499, 'PlantinStd': 500, 'PlantinStd-Bold': 501, 'PlantinStd-BoldCondensed': 502, 'PlantinStd-BoldItalic': 503, 'PlantinStd-Italic': 504, 'PlantinStd-Light': 505, 'PlantinStd-SemiboldItalic': 506, 'PoeticaStd': 507, 'PompeiaStd-Inline': 508, 'PonderosaStd': 509, 'PostinoStd': 510, 'PostinoStd-Italic': 511, 'QuorumStd-Black': 512, 'QuorumStd-Bold': 513, 'QuorumStd-Book': 514, 'QuorumStd-Medium': 515, 'RaleighLTStd': 516, 'RaleighLTStd-Bold': 517, 'RaleighLTStd-DemiBold': 518, 'Raleway': 519, 'RaphaelStd': 520, 'ReporterLTStd-2': 521, 'Roboto': 522, 'Rockwell': 523, 'RockwellStd': 524, 'RockwellStd-Bold': 525, 'RockwellStd-BoldCondensed': 526, 'RockwellStd-BoldItalic': 527, 'RockwellStd-Condensed': 528, 'RockwellStd-ExtraBold': 529, 'RockwellStd-Light': 530, 'RomicStd-Bold': 531, 'RomicStd-Light': 532, 'RomicStd-Medium': 533, 'RosewoodStd-Fill': 534, 'RosewoodStd-Regular': 535, 'RotationLTStd-Bold': 536, 'RotisSansSerifStd': 537, 'RotisSansSerifStd-Bold': 538, 'RotisSansSerifStd-ExtraBold': 539, 'RotisSansSerifStd-Light': 540, 'RotisSemiSansStd': 541, 'RotisSemiSansStd-Bold': 542, 'RotisSemiSansStd-ExtraBold': 543, 'RotisSemiSansStd-Light': 544, 'RotisSemiSerifStd': 545, 'RotisSemiSerifStd-Bold': 546, 'RotisSerifStd': 547, 'RotisSerifStd-Bold': 548, 'RotisSerifStd-Italic': 549, 'RunicMTStd-Condensed': 550, 'RuzickaFreehandLTStd-Bold': 551, 'RuzickaFreehandLTStd-Roman': 552, 'Sabon': 553, 'Sansation': 554, 'SanvitoPro-Bold': 555, 'SanvitoPro-Regular': 556, 'SanvitoPro-Semibold': 557, 'SanvitoPro-SemiboldDisp': 558, 'SassafrasStd-Roman': 559, 'ScriptMTStd-Bold': 560, 'SerpentineStd-Bold': 561, 'SerpentineStd-BoldOblique': 562, 'SerpentineStd-Medium': 563, 'ShannonStd-Bold': 564, 'ShannonStd-Book': 565, 'ShannonStd-ExtraBold': 566, 'ShoLTStd-Roman': 567, 'SilentiumPro-RomanII': 568, 'SimonciniGaramondStd': 569, 'SimonciniGaramondStd-Bold': 570, 'SimonciniGaramondStd-Italic': 571, 'SlimbachStd-Bold': 572, 'SlimbachStd-BoldItalic': 573, 'SlimbachStd-Book': 574, 'SlimbachStd-Medium': 575, 'SmaragdLTStd': 576, 'SnellRoundhandLTStd-BdScr': 577, 'SnellRoundhandLTStd-BlkScr': 578, 'SnellRoundhandLTStd-Scr': 579, 'Snowdrift Regular': 580, 'SpectrumMTStd': 581, 'SpringLPStd': 582, 'SpringLPStd-Light': 583, 'SpumoniLPStd': 584, 'Steppes TT': 585, 'SyntaxLTStd-Black': 586, 'SyntaxLTStd-Bold': 587, 'SyntaxLTStd-Italic': 588, 'SyntaxLTStd-Roman': 589, 'SyntaxLTStd-UltraBlack': 590, 'TektonPro-Bold': 591, 'TektonPro-BoldCond': 592, 'TektonPro-BoldObl': 593, 'TektonPro-Cond': 594, 'TektonPro-Regular': 595, 'TiepoloStd-Black': 596, 'TiepoloStd-BlackItalic': 597, 'TiepoloStd-Bold': 598, 'TiepoloStd-Book': 599, 'Times New Roman': 600, 'TimesEuropaLTStd-Bold': 601, 'TimesEuropaLTStd-BoldItalic': 602, 'TimesLTStd-Bold': 603, 'TimesLTStd-BoldItalic': 604, 'TimesLTStd-ExtraBold': 605, 'TimesLTStd-Italic': 606, 'TimesLTStd-Roman': 607, 'TimesLTStd-Semibold': 608, 'TimesLTStd-SemiboldItalic': 609, 'TimesNewRomanMTStd': 610, 'TimesNewRomanMTStd-Bold': 611, 'TimesNewRomanMTStd-BoldCond': 612, 'TimesNewRomanMTStd-BoldIt': 613, 'TimesNewRomanMTStd-Cond': 614, 'TimesNewRomanMTStd-Italic': 615, 'TradeGothicLTStd': 616, 'TradeGothicLTStd-Bd2': 617, 'TradeGothicLTStd-BdCn20': 618, 'TradeGothicLTStd-Bold': 619, 'TradeGothicLTStd-BoldExt': 620, 'TradeGothicLTStd-BoldObl': 621, 'TradeGothicLTStd-Cn18': 622, 'TradeGothicLTStd-Extended': 623, 'TradeGothicLTStd-Light': 624, 'UmbraStd': 625, 'UsherwoodStd-Black': 626, 'UsherwoodStd-Bold': 627, 'UsherwoodStd-BoldItalic': 628, 'UsherwoodStd-Book': 629, 'UsherwoodStd-Medium': 630, 'VectoraLTStd-Roman': 631, 'VeljovicStd-Black': 632, 'VeljovicStd-Bold': 633, 'VeljovicStd-Book': 634, 'VeljovicStd-Medium': 635, 'VeljovicStd-MediumItalic': 636, 'Verdana': 637, 'VersaillesLTStd-Black': 638, 'VersaillesLTStd-Light': 639, 'VersaillesLTStd-Roman': 640, 'VisigothStd': 641, 'VivaStd-Bold': 642, 'VivaStd-BoldExtraExtended': 643, 'VivaStd-Light': 644, 'VivaStd-Regular': 645, 'VolutaScriptPro-Regular': 646, 'Walkway': 647, 'WarnockPro-Bold': 648, 'WarnockPro-BoldItCapt': 649, 'WarnockPro-BoldItDisp': 650, 'WarnockPro-Light': 651, 'WarnockPro-Regular': 652, 'WarnockPro-Semibold': 653, 'WarnockPro-SemiboldCapt': 654, 'WarnockPro-SemiboldDisp': 655, 'WatersTitlingPro-Bd': 656, 'WatersTitlingPro-Rg': 657, 'WatersTitlingPro-Sb': 658, 'WeidemannStd-Book': 659, 'WendyLPStd-Bold': 660, 'WendyLPStd-Light': 661, 'WendyLPStd-Medium': 662, 'WiesbadenSwingLTStd-Roman': 663, 'WilhelmKlingsporGotLTStd': 664, 'WittenbergerFrakturMTStd-Bd': 665, 'ZebrawoodStd-Fill': 666, 'ZebrawoodStd-Regular': 667, 'ZiptyDoStd': 668}
+
+# Load font classification model
+model_path = "C:/Users/User/Desktop/UI-Generator/models/Model_Fonts.h5"
+try:
+    model = load_model(model_path)
+    print("Model loaded successfully.")
+except OSError as e:
+    print(f"Error loading model: {e}")
+
+# Preprocess image for model prediction
+def preprocess(img):
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)  # Convert to grayscale
+    img = cv2.resize(img, (105, 105))  # Resize to the target shape
+    img = img / 255.0  # Normalize
+    img = np.expand_dims(img, axis=-1)  # Channel dimension
+    img = np.expand_dims(img, axis=0)   # Batch dimension
+    return img
+
+# Crop and save image
+def crop_and_save_image(image_path, bbox, output_path):
+    image = cv2.imread(image_path)
+    if image is None:
+        raise ValueError(f"Image not found: {image_path}")
+    
+    x, y, w, h = [int(i) for i in bbox]
+    cropped_image = image[y:y + h, x:x + w]
+    cv2.imwrite(output_path, cropped_image)
+    return cropped_image
+
+# Extract text from bounding box using pytesseract
+def extract_text_from_bounding_box(image_path, bbox):
+    img = Image.open(image_path)
+    left = int(bbox['X'])
+    top = int(bbox['Y'])
+    right = left + int(bbox['Width'])
+    bottom = top + int(bbox['Height'])
+    cropped_image = img.crop((left, top, right, bottom))
+    text = pytesseract.image_to_string(cropped_image)
+    return text.strip()
+
+# Font detection function
+def font_detection(image_path, bbox):
+    info = {}
+    # Crop image for font prediction
+    cropped_image = crop_and_save_image(image_path, bbox, "Images/cropped.png")
+    preprocessed_image = preprocess(cropped_image)
+    
+    # Predict font
+    predictions = model.predict(preprocessed_image)[0]
+    predicted_class = np.argmax(predictions)
+    index_to_class = {v: k for k, v in indicies.items()}
+    predicted_font = index_to_class.get(predicted_class, "Unknown")
+    info['font'] = predicted_font
+
+    # OCR with tesserocr
+    tessdata_dir = 'C:/Program Files/Tesseract-OCR/tessdata'
+    height, width = cropped_image.shape[:2]
+    gray = cv2.cvtColor(cropped_image, cv2.COLOR_BGR2GRAY)
+
+    with tesserocr.PyTessBaseAPI(path=tessdata_dir) as api:
+        pil_image = Image.open(image_path)
+        api.SetImage(pil_image)
+        api.Recognize()
+        iterator = api.GetIterator()
+
+        attrs = {}
+        while iterator:
+            word_attrs = iterator.WordFontAttributes()
+            if word_attrs:
+                x, y, w, h = iterator.BoundingBox(tesserocr.RIL.WORD)
+                normalized_font_size = (h / height) * 100
+                normalized_x = x / width
+                normalized_y = y / height
+                normalized_w = w / width
+                normalized_h = h / height
+
+                underline_region = gray[int(y + h):int(y + h + 5), int(x):int(x + w)]
+                is_underlined = np.mean(underline_region) < 127
+
+                word_attrs['underlined'] = is_underlined
+                word_attrs['normalized_font_size'] = normalized_font_size
+                word_attrs['relative_position'] = (normalized_x, normalized_y, normalized_w, normalized_h)
+
+                text = iterator.GetUTF8Text(tesserocr.RIL.WORD).strip()
+                print(f"Extracted Text: {text}")
+
+                attrs = word_attrs
+
+            if not iterator.Next(tesserocr.RIL.WORD):
+                break
+
+        # Save attributes
+        info['serif'] = attrs.get('serif', False)
+        info['underlined'] = attrs.get('underlined', False)
+        info['bold'] = attrs.get('bold', False)
+        info['italic'] = attrs.get('italic', False)
+        info['pointsize'] = attrs.get('pointsize', 0)
+
+    return info
