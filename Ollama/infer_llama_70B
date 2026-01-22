@@ -1,0 +1,102 @@
+import platform
+from llama_cpp import Llama
+from groq import Groq
+import os
+
+# ------------------ GROQ CLIENT ------------------
+# Always use environment variable for API key
+client = Groq(api_key=os.getenv("GROQ_API_KEY", ""))
+
+# ------------------ OS CHECK ------------------
+def check_os():
+    """
+    Returns the current operating system type.
+    Used to determine environment and model selection.
+    """
+    current_os = platform.system()
+    if current_os == "Linux":
+        return "Linux"
+    else:
+        return current_os
+
+
+current_os = check_os()
+print(f"Detected OS: {current_os}")
+
+# ------------------ MODEL PATHS ------------------
+if current_os == "Linux":
+    print("Server environment detected")
+    print("Loading LLaMA 70B model")
+    model_path = "./models/llama-2-13b-chat.Q4_K_M.gguf"
+    model_path_70 = "./models/Meta-Llama-3-70B-Instruct.Q4_K_M.gguf"
+else:
+    print("Local environment detected")
+    print("Loading LLaMA 13B model")
+    model_path = "./models/llama-2-13b-chat.Q4_K_M.gguf"
+    model_path_70 = None  # Not available locally
+
+# ------------------ GENERATION SETTINGS ------------------
+generation_kwargs = {
+    "max_tokens": 2048,
+    "stop": ["</s>"],
+    "echo": False,
+    "top_k": 1,
+    "temperature": 0.0,
+    "top_p": 0.95,
+    "repeat_penalty": 1.15,
+}
+
+# ------------------ LLaMA MODEL INSTANCES ------------------
+def create_llama_model(model_path):
+    """
+    Create a LLaMA model instance.
+    Automatically configures GPU/CPU layers.
+    """
+    if not model_path or not os.path.exists(model_path):
+        raise FileNotFoundError(f"LLaMA model file not found: {model_path}")
+
+    return Llama(
+        model_path=model_path,
+        n_ctx=4000,
+        n_threads=0,
+        n_gpu_layers=130,  # Adjust based on your GPU memory
+        verbose=False
+    )
+
+
+def create_llama_model_70b():
+    """
+    Creates a LLaMA 70B model instance (server only)
+    """
+    if not model_path_70 or not os.path.exists(model_path_70):
+        raise FileNotFoundError(f"LLaMA 70B model file not found: {model_path_70}")
+
+    return create_llama_model(model_path_70)
+
+
+# ------------------ GROQ INFERENCE ------------------
+def infer_with_groq(system_prompt, user_prompt):
+    """
+    Uses Groq API to generate completion from a model.
+    """
+    completion = client.chat.completions.create(
+        model="llama3-70b-8192",
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
+        ],
+        temperature=0,
+        max_tokens=8192,
+        top_p=0.95,
+        stream=False,
+        stop=None,
+    )
+    return completion.choices[0].message.content
+
+
+# ------------------ INSTANTIATE MODELS ------------------
+llm = create_llama_model(model_path)
+
+llm_70b = None
+if current_os == "Linux":
+    llm_70b = create_llama_model_70b()
