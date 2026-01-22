@@ -1,0 +1,106 @@
+import cv2
+import numpy as np
+from sklearn.cluster import KMeans
+from collections import Counter
+from scipy.stats import entropy, mode
+import matplotlib.pyplot as plt
+
+
+def RGB2HEX(color):
+    return "#{:02x}{:02x}{:02x}".format(int(color[0]), int(color[1]), int(color[2]))
+
+
+def analyze_histogram(hist):
+    """Compute entropy of a histogram"""
+    hist_norm = hist / hist.sum()
+    return entropy(hist_norm)
+
+
+def get_most_frequent_color(image_path):
+    """Return the most frequent RGB color in the image"""
+    img = cv2.imread(image_path)
+    pixels = img.reshape(-1, 3)
+    most_common_bgr = Counter(map(tuple, pixels)).most_common(1)[0][0]
+    return (most_common_bgr[2], most_common_bgr[1], most_common_bgr[0])  # BGR → RGB
+
+
+def get_colors_hex(image, n_colors=5):
+    """Return top N dominant colors as HEX"""
+    h, w = image.shape[:2]
+    img_resized = cv2.resize(image, (600, int(600 * h / w)), interpolation=cv2.INTER_AREA)
+    pixels = img_resized.reshape(-1, 3)
+
+    kmeans = KMeans(n_clusters=n_colors, random_state=42, n_init='auto')
+    labels = kmeans.fit_predict(pixels)
+
+    counts = Counter(labels)
+    centers = kmeans.cluster_centers_
+    ordered_colors = [centers[i] for i in counts.keys()]
+    return [RGB2HEX(c) for c in ordered_colors]
+
+
+def unique_bg_text(image_path):
+    """Detect text and background colors using KMeans"""
+    img = cv2.imread(image_path)
+    img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    pixels = img_rgb.reshape(-1, 3)
+
+    kmeans = KMeans(n_clusters=2, random_state=42, n_init='auto')
+    labels = kmeans.fit_predict(pixels)
+    labels_img = labels.reshape(img_rgb.shape[0], img_rgb.shape[1])
+
+    unique, counts = np.unique(labels, return_counts=True)
+    pixel_counts = dict(zip(unique, counts))
+    text_label = min(pixel_counts, key=pixel_counts.get)
+    bg_label = max(pixel_counts, key=pixel_counts.get)
+
+    text_color = mode(pixels[labels == text_label], axis=0)[0][0]
+    bg_color = mode(pixels[labels == bg_label], axis=0)[0][0]
+
+    return text_color, bg_color
+
+
+def color_detection(image_path, element_type):
+    """Main Color Detection Module"""
+
+    element_type = element_type.lower()
+
+    if element_type == "text":
+        img = cv2.imread(image_path)
+        img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        img_blur = cv2.GaussianBlur(img_gray, (3, 3), 0)
+        edges = cv2.Canny(img_blur, 100, 200)
+        mask = cv2.dilate(edges, np.ones((2, 2), np.uint8), iterations=1)
+        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+        # Mask for text pixels
+        text_mask = np.zeros_like(img_gray)
+        cv2.drawContours(text_mask, contours, -1, 255, thickness=cv2.FILLED)
+        text_pixels = img[text_mask == 255].reshape(-1, 3)
+        bg_pixels = img[text_mask == 0].reshape(-1, 3)
+
+        # Convert most frequent BGR → RGB
+        text_color = tuple(text_pixels.tolist())
+        text_color = Counter(map(tuple, text_pixels)).most_common(1)[0][0]
+        text_color_rgb = (text_color[2], text_color[1], text_color[0])
+
+        bg_color = Counter(map(tuple, bg_pixels)).most_common(1)[0][0]
+        bg_color_rgb = (bg_color[2], bg_color[1], bg_color[0])
+
+        # Background complexity check
+        hist = cv2.calcHist([bg_pixels.reshape(-1, 1, 3)], [0, 1, 2], None, [8, 8, 8], [0, 256]*3)
+        hist = cv2.normalize(hist, hist).flatten()
+        hist_entropy = analyze_histogram(hist)
+
+        if hist_entropy < 1:
+            text_color_rgb, bg_color_rgb = unique_bg_text(image_path)
+
+        return {"text": RGB2HEX(text_color_rgb), "background": RGB2HEX(bg_color_rgb)}
+
+    elif element_type in ["icon", "image"]:
+        img = cv2.imread(image_path)
+        img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        return get_colors_hex(img_rgb, 5)
+
+    else:
+        return RGB2HEX(get_most_frequent_color(image_path))
