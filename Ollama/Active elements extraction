@@ -1,0 +1,175 @@
+import os
+import re
+import requests
+from bs4 import BeautifulSoup
+from groq import Groq
+
+# ------------------ GROQ CLIENT ------------------
+client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+
+
+def infer_with_groq(system_prompt, user_prompt):
+    completion = client.chat.completions.create(
+        model="llama3-70b-8192",
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
+        ],
+        temperature=0,
+        max_tokens=8192,
+        top_p=0.95
+    )
+    return completion.choices[0].message.content
+
+
+# ------------------ HTML PARSING ------------------
+def parse_html(html_content):
+    return BeautifulSoup(html_content, "html.parser")
+
+
+def is_function_implemented(soup, function_name):
+    for script in soup.find_all("script"):
+        if function_name in script.text:
+            return True
+    return False
+
+
+# ------------------ BUTTONS ------------------
+def handle_buttons(form, soup):
+    button_details = []
+
+    buttons = form.find_all("button") + form.find_all(
+        "input", {"type": ["button", "submit"]}
+    )
+
+    for button in buttons:
+        button_text = (
+            button.text.strip()
+            if button.name == "button"
+            else button.get("value", "")
+        )
+
+        attributes = {
+            "text": button_text,
+            "type": button.get("type"),
+            "id": button.get("id"),
+            "name": button.get("name"),
+            "value": button.get("value")
+        }
+
+        for event in ["onclick", "onsubmit", "onchange"]:
+            event_fn = button.get(event)
+            if event_fn:
+                fn_name = event_fn.split("(")[0].strip("{} ")
+                attributes[event] = {
+                    "function": fn_name,
+                    "implemented": is_function_implemented(soup, fn_name)
+                }
+
+        button_details.append(attributes)
+
+    return button_details
+
+
+# ------------------ LINKS ------------------
+def verify_link_accessibility(href):
+    try:
+        response = requests.head(href, timeout=5, allow_redirects=True)
+        return response.status_code < 400
+    except requests.RequestException:
+        return False
+
+
+def handle_links(container):
+    links_data = []
+
+    for link in container.find_all("a", href=True):
+        href = link["href"]
+        data = {
+            "text": link.text.strip(),
+            "href": href,
+            "target": link.get("target"),
+            "id": link.get("id")
+        }
+
+        if href.startswith("http"):
+            data["accessible"] = verify_link_accessibility(href)
+
+        links_data.append(data)
+
+    return links_data
+
+
+# ------------------ FORMS ------------------
+def handle_forms(html_content):
+    soup = parse_html(html_content)
+
+    forms = soup.find_all("form") + soup.find_all(
+        "box", attrs={"component": "form"}
+    )
+
+    results = []
+
+    for form in forms:
+        events = {}
+
+        for event in ["onclick", "onsubmit", "onchange"]:
+            fn = form.get(event)
+            if fn:
+                events[event] = fn.split("(")[0].strip("{} ")
+
+        action = form.get("action", "").strip("{} ")
+        method = form.get("method", "").lower()
+
+        results.append({
+            "action": action,
+            "method": method,
+            "events": events,
+            "buttons": handle_buttons(form, soup),
+            "links": handle_links(form)
+        })
+
+    return results
+
+
+# ------------------ REACT CODE EXTRACTION ------------------
+def react_code_extraction(code, file_path):
+    snippets = re.findall(r"```(?:jsx|js)?\n(.*?)```", code, re.DOTALL)
+
+    with open(file_path, "w", encoding="utf-8") as f:
+        for snippet in snippets:
+            f.write(snippet.strip() + "\n\n")
+
+    return snippets
+
+
+# ------------------ FILE SEARCH ------------------
+def search_and_check_file(project_dir, filename):
+    for root, _, files in os.walk(project_dir):
+        if filename in files:
+            path = os.path.join(root, filename)
+            return os.path.getsize(path) > 0
+    return None
+
+
+# ------------------ PROMPT GENERATION ------------------
+def generate_IF(requirement, results, code):
+    return f"""
+Initial React Code:
+{code}
+
+Detected Active Elements:
+{results}
+
+User Requirement:
+{requirement}
+"""
+
+
+def application_builder_react(IF):
+    system_prompt = """
+You are an expert React developer.
+Update the provided React code based strictly on the user requirement.
+Return only valid React code.
+"""
+    return infer_with_groq(system_prompt, IF)
