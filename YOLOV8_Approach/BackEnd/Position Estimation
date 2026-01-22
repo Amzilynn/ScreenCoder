@@ -1,0 +1,65 @@
+import cv2
+import os
+from ultralytics import YOLO
+
+# ------------------ PATHS ------------------
+model_path = r'C:/Users/User/Desktop/UI-Generator/models/screenshot.pt'
+image_path = r'C:/Users/User/Desktop/UI-Generator/Position_Estimation/screenshot_home 1.png'
+output_dir = r'C:/Users/User/Desktop/UI-Generator/Position_Estimation/BoundingBox'
+
+os.makedirs(output_dir, exist_ok=True)  # Ensure output directory exists
+
+# ------------------ LOAD MODEL ------------------
+model = YOLO(model_path)
+
+# ------------------ LOAD IMAGE ------------------
+image = cv2.imread(image_path)
+if image is None:
+    raise FileNotFoundError(f"Image not found at {image_path}")
+
+# ------------------ PREDICTION ------------------
+results = model.predict(
+    image,
+    show=False,           # Don't display automatically
+    save=True,            # Save output images
+    project=output_dir,   # Output directory
+    exist_ok=True
+)
+
+# The predicted image path (YOLO saves under project/predict/)
+detected_image_path = os.path.join(output_dir, "predict", "image0.jpg")
+if not os.path.exists(detected_image_path):
+    print("Warning: Detected image path not found. Check YOLO output folder.")
+
+# ------------------ EXTRACT BOUNDING BOXES ------------------
+bounding_boxes = []
+
+for box in results[0].boxes:  # First image's results
+    # YOLO returns tensor, convert to Python float
+    x1, y1, x2, y2 = box.xyxy[0].tolist()
+    width = x2 - x1
+    height = y2 - y1
+
+    bbox = {
+        "top": f"{int(y1)}px",
+        "left": f"{int(x1)}px",
+        "width": f"{int(width)}px",
+        "height": f"{int(height)}px"
+    }
+    bounding_boxes.append(bbox)
+
+# ------------------ SAVE BOUNDING BOXES ------------------
+bounding_boxes_file_path = os.path.join(output_dir, "bounding_boxes.txt")
+with open(bounding_boxes_file_path, "w") as f:
+    for bbox in bounding_boxes:
+        f.write(f"{bbox}\n")
+
+print("Bounding boxes extracted and saved:")
+print(bounding_boxes)
+
+# ------------------ OPTIONAL DISPLAY ------------------
+if os.path.exists(detected_image_path):
+    detected_image = cv2.imread(detected_image_path)
+    cv2.imshow("Detected Image", detected_image)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
