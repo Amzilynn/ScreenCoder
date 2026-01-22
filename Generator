@@ -1,0 +1,64 @@
+from ctransformers import AutoModelForCausalLM, AutoConfig
+import time
+
+def UIgenerator(UI: str) -> str:
+    """
+    Prepares the prompt for the LLaMA-2 model based on UI description.
+    """
+    prompt_template = f'''[INST] <<SYS>>
+You are an honest and respectful code developer who understands HTML and CSS.
+Given a comprehensive description of UI elements, recreate an HTML code corresponding to it.
+Include head, body, and script tags.
+Reference "Style.css" for CSS.
+Replace "table" with "array" HTML code, "input" with "input field", and "label" with "text".
+Ensure <!DOCTYPE html> and <html> are at the beginning of every HTML code.
+<</SYS>>
+Description of UI elements:
+{UI}
+[/INST]
+'''
+    return prompt_template
+
+def generate_code_with_GGUF(UI: str) -> str:
+    """
+    Generates HTML code from a UI description using a local GGUF LLaMA-2 model.
+    """
+    start = time.time()
+
+    # Load configuration
+    model_path = "llama-2-13b-chat.Q4_K_M.gguf"
+    config = AutoConfig.from_pretrained(model_path)
+    
+    # Adjust config
+    config.config.max_new_tokens = 2048
+    config.config.context_length = 17000
+
+    # Load model
+    llm = AutoModelForCausalLM.from_pretrained(
+        model_path,
+        model_type="llama",
+        gpu_layers=130,
+        repetition_penalty=1.15,
+        temperature=0.0,
+        top_p=0.95,
+        stream=False,   # Disable streaming if you want full output at once
+        config=config
+    )
+
+    # Generate final prompt
+    final_prompt = UIgenerator(UI)
+    
+    # Generate HTML code
+    response = llm(final_prompt, stream=False)
+    
+    print("Generated HTML Code:\n", response)
+
+    end = time.time()
+    print("Duration:", end - start, "seconds")
+
+    return response
+
+# Example usage
+if __name__ == "__main__":
+    UI_description = "A login form with username, password fields and a submit button."
+    html_code = generate_code_with_GGUF(UI_description)
