@@ -1,0 +1,52 @@
+import logging
+from pathlib import Path
+from ultralytics import YOLO
+
+def train_and_evaluate_yolo(train_data_path, test_data_path, epochs=10, patience=5, learning_rate=0.001, batch_size=16):
+    # Set up logging
+    logging.basicConfig(filename='training.log', level=logging.INFO, 
+                        format='%(asctime)s - %(levelname)s - %(message)s')
+
+    try:
+        # Validate data paths
+        if not train_data_path.exists():
+            raise FileNotFoundError(f"Train data YAML not found: {train_data_path}")
+        if not test_data_path.exists():
+            raise FileNotFoundError(f"Test data YAML not found: {test_data_path}")
+
+        # Load a pretrained YOLO model
+        model_path = Path('C:/Users/User/Desktop/sketch-to-codeV0/YOLOV8_Approach/BackEnd/runs/Manuallyannotatedtrainv3onlygrayscale/train/weights/best.pt')
+        if not model_path.exists():
+            raise FileNotFoundError(f"YOLO weights not found: {model_path}")
+
+        model = YOLO(model_path)
+
+        # Set training parameters
+        project_dir = Path('C:/Users/User/Desktop/sketch-to-codeV0/YOLOV8_Approach/BackEnd/runs/22thJulyv3')
+        project_dir.mkdir(parents=True, exist_ok=True)
+
+        training_params = {
+            'data': str(train_data_path),
+            'epochs': epochs,
+            'project': str(project_dir),
+            'lr0': learning_rate,
+            'batch': batch_size,
+            'patience': patience,  # Early stopping patience
+            'exist_ok': True       # Overwrite project folder if exists
+        }
+
+        # Start training
+        print("Start training YOLO...")
+        logging.info("Training started with parameters: %s", training_params)
+        model.train(**training_params)
+        print("YOLO model trained successfully!")
+        logging.info("Training completed successfully!")
+
+    except Exception as e:
+        logging.error(f"Training failed: {str(e)}")
+        print(f"Error: {e}")
+
+if __name__ == "__main__":
+    train_data_path = Path('C:/Users/User/Desktop/sketch-to-codeV0/YOLOV8_Approach/BackEnd/data/22thJuly/data.yaml')
+    test_data_path = Path('C:/Users/User/Desktop/sketch-to-codeV0/YOLOV8_Approach/BackEnd/data/22thJuly/test/data.yaml')
+    train_and_evaluate_yolo(train_data_path, test_data_path, epochs=10, patience=5, learning_rate=0.001, batch_size=16)
