@@ -1,0 +1,76 @@
+import cv2
+import csv
+import os
+
+# Paths
+img_path = 'C:/Users/User/Desktop/UI-Generator/Position_Estimation/Screenshot.jpg'
+csv_path = 'C:/Users/User/Desktop/UI-Generator/Position_Estimation/predict/Screenshot_positions.csv'
+output_dir = 'C:/Users/User/Desktop/UI-Generator/Position_Estimation/testing'
+output_path = os.path.join(output_dir, 'annotated_image.png')
+
+# Ensure output directory exists
+os.makedirs(output_dir, exist_ok=True)
+
+# Load the image
+img = cv2.imread(img_path)
+if img is None:
+    raise FileNotFoundError(f"Image not found at: {img_path}")
+img_height, img_width, _ = img.shape
+
+# Set the grid size
+grid_cols = 50
+grid_rows = 50
+grid_width = img_width // grid_cols
+grid_height = img_height // grid_rows
+
+# Overlay grid on the image
+for y in range(0, img_height, grid_height):
+    cv2.line(img, (0, y), (img_width, y), (0, 255, 0), 1)
+for x in range(0, img_width, grid_width):
+    cv2.line(img, (x, 0), (x, img_height), (0, 255, 0), 1)
+
+# Load CSV data
+csv_data = []
+if not os.path.exists(csv_path):
+    raise FileNotFoundError(f"CSV not found at: {csv_path}")
+
+with open(csv_path, 'r', newline='', encoding='utf-8') as file:
+    reader = csv.reader(file)
+    csv_data = list(reader)
+
+if len(csv_data) < 2:
+    raise ValueError("CSV file has no data rows.")
+
+# Draw bounding boxes and annotate
+for row in csv_data[1:]:  # Skip header
+    # Handle variable CSV lengths safely
+    try:
+        element_id = row[0]
+        class_label = row[1]
+        grid_range = row[2]
+        grid_row_start = int(row[3])
+        grid_row_end = int(row[4])
+        grid_col_start = int(row[5])
+        grid_col_end = int(row[6])
+    except (IndexError, ValueError):
+        print(f"Skipping invalid row: {row}")
+        continue
+
+    # Convert grid positions to pixel coordinates
+    x1 = grid_col_start * grid_width
+    y1 = grid_row_start * grid_height
+    x2 = (grid_col_end + 1) * grid_width
+    y2 = (grid_row_end + 1) * grid_height
+
+    # Ensure coordinates are within image bounds
+    x1, y1 = max(0, x1), max(0, y1)
+    x2, y2 = min(img_width, x2), min(img_height, y2)
+
+    # Draw rectangle and text
+    cv2.rectangle(img, (x1, y1), (x2, y2), (0, 0, 255), 2)
+    cv2.putText(img, f"{element_id} ({grid_range})", (x1, max(y1 - 5, 0)),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1)
+
+# Save the annotated image
+cv2.imwrite(output_path, img)
+print(f"Annotated image saved to {output_path}")
